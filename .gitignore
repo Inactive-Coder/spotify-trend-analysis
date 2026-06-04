@@ -221,5 +221,3 @@ venv/
 __pycache__/
 .ipynb_checkpoints/
 
-models/random_forest.pkl
-models/random_forest_full.pkl
