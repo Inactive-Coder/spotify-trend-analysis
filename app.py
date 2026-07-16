@@ -136,9 +136,10 @@ def _load_pkl(filename):
 @st.cache_resource(show_spinner="Loading regression models…")
 def load_regression_models():
     """Load pre-trained regression models and metrics from disk."""
-    metrics  = _load_pkl("regression_metrics.pkl")
-    rf_model = _load_pkl("random_forest_full.pkl")
-    return metrics, rf_model
+    metrics     = _load_pkl("regression_metrics.pkl")
+    hgb_model   = _load_pkl("hgb_full.pkl")
+    feature_meta = _load_pkl("feature_meta.pkl")
+    return metrics, hgb_model, feature_meta
 
 @st.cache_resource(show_spinner="Loading clustering models…")
 def load_clustering_models():
@@ -148,7 +149,8 @@ def load_clustering_models():
 def _models_exist():
     required = [
         "regression_metrics.pkl",
-        "random_forest_full.pkl",
+        "hgb_full.pkl",
+        "feature_meta.pkl",
         "clustering.pkl",
     ]
     return all(os.path.exists(os.path.join(MODELS_DIR, f)) for f in required)
@@ -393,9 +395,9 @@ with tab_ml:
             "Please run the training script first:\n```\npython train_and_save_models.py\n```"
         )
     else:
-        results, rf_model = load_regression_models()
+        results, hgb_model, feature_meta = load_regression_models()
 
-        col_l, col_r = st.columns(2)
+        col_l, col_m, col_r = st.columns(3)
 
         with col_l:
             st.subheader("📈 Linear Regression")
@@ -404,25 +406,34 @@ with tab_ml:
             m2.metric("RMSE", f"{results['lr']['mse']**0.5:.2f}")
             m3.metric("R²",   f"{results['lr']['r2']:.3f}")
 
-        with col_r:
+        with col_m:
             st.subheader("🌳 Random Forest")
             m1, m2, m3 = st.columns(3)
             m1.metric("MAE",  f"{results['rf']['mae']:.2f}")
             m2.metric("RMSE", f"{results['rf']['mse']**0.5:.2f}")
             m3.metric("R²",   f"{results['rf']['r2']:.3f}")
 
+        with col_r:
+            st.subheader("⚡ Gradient Boosting")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("MAE",  f"{results['hgb']['mae']:.2f}")
+            m2.metric("RMSE", f"{results['hgb']['mse']**0.5:.2f}")
+            m3.metric("R²",   f"{results['hgb']['r2']:.3f}")
+
         st.markdown("---")
 
-        st.subheader("Feature Importance (Random Forest)")
-        imp = results["importance"]
+        st.subheader("Feature Importance (Grouped)")
+        imp = results.get("importance_grouped", results["importance"])
+        # Show top 15 features for readability
+        imp_display = imp.head(15)
         fig = px.bar(
-            imp, x="Importance", y="Feature",
+            imp_display, x="Importance", y="Feature",
             orientation="h",
             color="Importance",
             color_continuous_scale=[[0, "#1a2a1f"], [1, SPOTIFY_GREEN]],
             labels={"Importance": "Importance Score", "Feature": ""},
         )
-        fig = styled(fig, "Random Forest Feature Importance", height=420)
+        fig = styled(fig, "Feature Importance (categories grouped)", height=480)
         fig.update_coloraxes(showscale=False)
         st.plotly_chart(fig, width='stretch')
 
@@ -430,13 +441,25 @@ with tab_ml:
 
         # Interactive predictor
         st.subheader("🎛 Predict Popularity for a Custom Track")
-        st.markdown("Adjust the sliders and see how the Random Forest model would rate a hypothetical track.")
+        st.markdown("Adjust the inputs below and see how the **Gradient Boosting** model would rate a hypothetical track.")
+
+        # Categorical inputs
+        cat_col1, cat_col2, cat_col3, cat_col4 = st.columns(4)
+        with cat_col1:
+            pred_genre = st.selectbox("Genre", sorted(df_all["genre"].unique().tolist()), index=0)
+        with cat_col2:
+            pred_key = st.selectbox("Key", ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], index=0)
+        with cat_col3:
+            pred_mode = st.selectbox("Mode", ["Major", "Minor"], index=0)
+        with cat_col4:
+            pred_timesig = st.selectbox("Time Signature", ["4/4", "3/4", "5/4", "1/4", "0/4"], index=0)
 
         col1, col2, col3 = st.columns(3)
         with col1:
             dance = st.slider("Danceability", 0.0, 1.0, 0.55, 0.01)
             energy = st.slider("Energy", 0.0, 1.0, 0.57, 0.01)
             loudness = st.slider("Loudness (dB)", -52.0, 4.0, -9.5, 0.5)
+            duration_ms = st.slider("Duration (sec)", 15, 600, 210, 5) * 1000
         with col2:
             speech = st.slider("Speechiness", 0.0, 1.0, 0.12, 0.01)
             acoustic = st.slider("Acousticness", 0.0, 1.0, 0.37, 0.01)
@@ -446,8 +469,22 @@ with tab_ml:
             tempo = st.slider("Tempo (BPM)", 30.0, 243.0, 118.0, 1.0)
             valence = st.slider("Valence", 0.0, 1.0, 0.45, 0.01)
 
-        custom = np.array([[dance, energy, loudness, speech, acoustic, instrumental, liveness, tempo, valence]])
-        pred = rf_model.predict(custom)[0]
+        # Build input DataFrame matching the training feature set
+        custom_data = {
+            "danceability": [dance], "energy": [energy], "loudness": [loudness],
+            "speechiness": [speech], "acousticness": [acoustic],
+            "instrumentalness": [instrumental], "liveness": [liveness],
+            "tempo": [tempo], "valence": [valence], "duration_ms": [duration_ms],
+            "energy_x_dance": [energy * dance],
+            "loud_x_energy": [loudness * energy],
+            "acoustic_inverse": [1 - acoustic],
+            "genre": [pred_genre], "key": [pred_key],
+            "mode": [pred_mode], "time_signature": [pred_timesig],
+        }
+        custom_df = pd.DataFrame(custom_data)
+        # Use the feature column order from training
+        custom_df = custom_df[feature_meta["all_feature_cols"]]
+        pred = hgb_model.predict(custom_df)[0]
 
         st.markdown(f"""
         <div style="
@@ -458,7 +495,7 @@ with tab_ml:
             margin-top: 1rem;
             text-align: center;
         ">
-            <p style="color:#8b949e; margin:0; font-size:0.9rem;">Predicted Popularity</p>
+            <p style="color:#8b949e; margin:0; font-size:0.9rem;">Predicted Popularity (Gradient Boosting)</p>
             <p style="color:#1db954; font-size:3rem; font-weight:800; margin:0.2rem 0;">{pred:.1f}<span style="font-size:1.5rem; color:#8b949e"> / 100</span></p>
         </div>
         """, unsafe_allow_html=True)
