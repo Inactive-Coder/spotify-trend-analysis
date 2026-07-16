@@ -10,7 +10,7 @@ import os
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Spotify Trend Analysis",
-    page_icon="🎵",
+    page_icon="S",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -170,7 +170,7 @@ def styled(fig, title="", height=420):
 df_all = load_data()
 
 with st.sidebar:
-    st.markdown("## 🎵 Spotify Trends")
+    st.markdown("## Spotify Trends")
     st.markdown("---")
 
     st.markdown("### Filters")
@@ -205,14 +205,14 @@ else:
 # NAVBAR (horizontal tabs)
 # ─────────────────────────────────────────────────────────────────────────────
 tab_overview, tab_pop, tab_audio, tab_ml, tab_cluster = st.tabs(
-    ["📊 Overview", "🎯 Popularity", "🎼 Audio Features", "🤖 ML Prediction", "🔵 Clustering"]
+    ["Overview", "Popularity", "Audio Features", "ML Prediction", "Clustering"]
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB: OVERVIEW
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_overview:
-    st.title("Spotify Trend Analysis 🎵")
+    st.title("Spotify Trend Analysis")
     st.markdown("Explore **232k+ Spotify tracks** — what makes songs popular, how features correlate, and what clusters emerge.")
     st.markdown("---")
 
@@ -400,21 +400,21 @@ with tab_ml:
         col_l, col_m, col_r = st.columns(3)
 
         with col_l:
-            st.subheader("📈 Linear Regression")
+            st.subheader("Linear Regression")
             m1, m2, m3 = st.columns(3)
             m1.metric("MAE",  f"{results['lr']['mae']:.2f}")
             m2.metric("RMSE", f"{results['lr']['mse']**0.5:.2f}")
             m3.metric("R²",   f"{results['lr']['r2']:.3f}")
 
         with col_m:
-            st.subheader("🌳 Random Forest")
+            st.subheader("Random Forest")
             m1, m2, m3 = st.columns(3)
             m1.metric("MAE",  f"{results['rf']['mae']:.2f}")
             m2.metric("RMSE", f"{results['rf']['mse']**0.5:.2f}")
             m3.metric("R²",   f"{results['rf']['r2']:.3f}")
 
         with col_r:
-            st.subheader("⚡ Gradient Boosting")
+            st.subheader("Gradient Boosting")
             m1, m2, m3 = st.columns(3)
             m1.metric("MAE",  f"{results['hgb']['mae']:.2f}")
             m2.metric("RMSE", f"{results['hgb']['mse']**0.5:.2f}")
@@ -440,7 +440,7 @@ with tab_ml:
         st.markdown("---")
 
         # Interactive predictor
-        st.subheader("🎛 Predict Popularity for a Custom Track")
+        st.subheader("Predict Popularity for a Custom Track")
         st.markdown("Adjust the inputs below and see how the **Gradient Boosting** model would rate a hypothetical track.")
 
         # Categorical inputs
